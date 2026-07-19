@@ -157,9 +157,9 @@ def simulate_site(df, num_chargers, site_id):
 def main():
     # Configure parameters for each site
     site_configs = [
-        {'filename': '../acndata_sessions_caltech.json', 'chargers': 10, 'id': 'Site_A'},
-        {'filename': '../acndata_sessions_jpl.json', 'chargers': 15, 'id': 'Site_B'},
-        {'filename': '../acndata_sessions_office1.json', 'chargers': 8, 'id': 'Site_C'}
+        {'filename': '../caltech.json', 'chargers': 10, 'id': 'Site_A'},
+        {'filename': '../jpl.json', 'chargers': 15, 'id': 'Site_B'},
+        {'filename': '../office001.json', 'chargers': 8, 'id': 'Site_C'}
     ]
     
     all_site_data = []

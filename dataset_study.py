@@ -1,7 +1,7 @@
 import json
 import os
 
-def count_unique_stations(file_configs):
+def count_unique_stations(file_configs, output_txt_path='station_counts_summary.txt'):
     all_stations = set()
     site_counts = {}
 
@@ -17,10 +17,8 @@ def count_unique_stations(file_configs):
             print(f"Attempting to read: {filename}...")
             data = json.load(f)
             
-        # Extract records safely depending on format
         records = data['_items'] if '_items' in data else data
         
-        # Gather all station IDs for this specific site
         site_stations = set(
             record['stationID'] for record in records 
             if 'stationID' in record and record['stationID'] is not None
@@ -28,22 +26,29 @@ def count_unique_stations(file_configs):
         
         site_counts[site_id] = len(site_stations)
         
-        # Merge into the master set
         all_stations.update(site_stations)
         
-    print("--- Station Counts per Site ---")
+    output_lines = []
+    output_lines.append("--- Station Counts per Site ---")
     for site, count in site_counts.items():
-        print(f"{site}: {count} unique physical stations")
+        output_lines.append(f"{site}: {count} unique physical stations")
         
-    print("\n--- Total Unique Stations Across All Datasets ---")
-    print(f"Total: {len(all_stations)} unique station IDs")
+    output_lines.append("\n--- Total Unique Stations Across All Datasets ---")
+    output_lines.append(f"Total: {len(all_stations)} unique station IDs")
+    
+    final_output = "\n".join(output_lines)
+    
+    print("\n" + final_output)
+    
+    with open(output_txt_path, 'w') as out_file:
+        out_file.write(final_output)
+    print(f"\nSaved results successfully to '{output_txt_path}'")
 
 if __name__ == '__main__':
-    # Configuration matching your files
     files = [
-        {'filename': './datasets/acndata_sessions_caltech.json', 'id': 'Site_A (Caltech)'},
-        {'filename': './datasets/acndata_sessions_jpl.json', 'id': 'Site_B (JPL)'},
-        {'filename': './datasets/acndata_sessions_office1.json', 'id': 'Site_C (Office 1)'}
+        {'filename': './datasets/caltech.json', 'id': 'Site_A (Caltech)'},
+        {'filename': './datasets/jpl.json', 'id': 'Site_B (JPL)'},
+        {'filename': './datasets/office001.json', 'id': 'Site_C (Office 1)'}
     ]
     
     count_unique_stations(files)
