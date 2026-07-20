@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-def filter_overlapping_timestamps(input_csv='hourly_charging_telemetry.csv', output_csv='hourly_telemetry_aligned.csv'):
+def filter_overlapping_timestamps(input_csv='hourly_charging_telemetry.csv', output_csv='ground_truth.csv'):
     if not os.path.exists(input_csv):
         print(f"Error: Base telemetry file '{input_csv}' not found. Please run your simulation script first.")
         return
