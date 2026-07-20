@@ -24,19 +24,26 @@ def load_and_prepare_data(filepath):
     df = df.sort_values('connectionTime').reset_index(drop=True)
     return df
 
-def simulate_site(df, num_chargers, site_id):
+def simulate_site(df, num_chargers, site_id, filter_idle=False):
     """
     Runs a Discrete-Event Simulation for a single charging site and 
     tracks time-weighted metrics for exact hourly aggregation.
+    
+    Parameters
+    ----------
+    filter_idle : bool
+        If True, skips hours with no arrivals, no ongoing sessions, and no completions.
     """
     # Event loop structures
-    # Priority Queue elements: (timestamp, event_type, data)
+    # Priority Queue elements: (timestamp, event_type, tie_breaker, data)
     # event_type: 0 for DEPARTURE (processed first if timestamps match), 1 for ARRIVAL
     events = []
+    tie_breaker = 0
     
     # Populate all arrival events
     for idx, row in df.iterrows():
-        heapq.heappush(events, (row['connectionTime'], 1, row))
+        heapq.heappush(events, (row['connectionTime'], 1, tie_breaker, row))
+        tie_breaker += 1
         
     fifo_queue = []
     busy_chargers = 0
@@ -58,7 +65,8 @@ def simulate_site(df, num_chargers, site_id):
     last_state_time = first_event_time
     
     while events:
-        current_time, event_type, data = heapq.heappop(events)
+        # Unpack including the tie_breaker variable
+        current_time, event_type, _, data = heapq.heappop(events)
         
         # --- Time-Weighted Metric Accumulation ---
         # Distribute the duration since the last event into hourly buckets
@@ -91,9 +99,6 @@ def simulate_site(df, num_chargers, site_id):
             hourly_stats[arrival_hour]['arrivals'] += 1
             hourly_stats[arrival_hour]['service_times'].append((data['disconnectTime'] - data['connectionTime']).total_seconds() / 60.0)
             
-            # Context state at arrival
-            queue_len_at_arrival = len(fifo_queue)
-            
             if busy_chargers < num_chargers:
                 # Charger is free, start charging immediately
                 busy_chargers += 1
@@ -101,7 +106,9 @@ def simulate_site(df, num_chargers, site_id):
                 hourly_stats[arrival_hour]['waiting_times'].append(waiting_time_min)
                 
                 charging_end_time = current_time + (data['disconnectTime'] - data['connectionTime'])
-                heapq.heappush(events, (charging_end_time, 0, None))
+                # Use tie_breaker for departures too to keep tuple length consistent
+                heapq.heappush(events, (charging_end_time, 0, tie_breaker, None))
+                tie_breaker += 1
             else:
                 # All chargers busy, enter FIFO queue
                 fifo_queue.append((current_time, data['disconnectTime'] - data['connectionTime']))
@@ -119,7 +126,8 @@ def simulate_site(df, num_chargers, site_id):
                 hourly_stats[arr_time.replace(minute=0, second=0, microsecond=0)]['waiting_times'].append(waiting_time_min)
                 
                 charging_end_time = current_time + service_duration
-                heapq.heappush(events, (charging_end_time, 0, None))
+                heapq.heappush(events, (charging_end_time, 0, tie_breaker, None))
+                tie_breaker += 1
             else:
                 busy_chargers -= 1
 
@@ -128,9 +136,18 @@ def simulate_site(df, num_chargers, site_id):
     for hour_stamp, stats in sorted(hourly_stats.items()):
         total_secs = stats['total_monitored_seconds'] if stats['total_monitored_seconds'] > 0 else 3600.0
         
-        # Calculate Averages safely
-        avg_service = sum(stats['service_times']) / len(stats['service_times']) if stats['service_times'] else 0.0
-        avg_wait = sum(stats['waiting_times']) / len(stats['waiting_times']) if stats['waiting_times'] else 0.0
+        # Skip idle hours when filter_idle is enabled
+        if filter_idle:
+            is_idle = (stats['arrivals'] == 0 and
+                       stats['completed'] == 0 and
+                       stats['busy_charger_time_weighted'] == 0.0 and
+                       stats['queue_time_weighted'] == 0.0)
+            if is_idle:
+                continue
+        
+        # Calculate Averages safely — use NaN when no arrivals occurred
+        avg_service = sum(stats['service_times']) / len(stats['service_times']) if stats['service_times'] else None
+        avg_wait = sum(stats['waiting_times']) / len(stats['waiting_times']) if stats['waiting_times'] else None
         
         # Time-weighted metrics
         avg_queue_len = stats['queue_time_weighted'] / total_secs
@@ -143,8 +160,8 @@ def simulate_site(df, num_chargers, site_id):
             'timestamp_hour': hour_stamp.strftime('%Y-%m-%d %H:%M:%S'),
             'site_id': site_id,
             'arrivals_per_hour': stats['arrivals'],
-            'average_service_time_minutes': round(avg_service, 2),
-            'average_waiting_time_minutes': round(avg_wait, 2),
+            'average_service_time_minutes': round(avg_service, 2) if avg_service is not None else None,
+            'average_waiting_time_minutes': round(avg_wait, 2) if avg_wait is not None else None,
             'average_queue_length': round(avg_queue_len, 2),
             'maximum_queue_length': stats['max_queue'],
             'charger_utilization': round(utilization, 4),
@@ -154,12 +171,12 @@ def simulate_site(df, num_chargers, site_id):
         
     return hourly_records
 
-def main():
+def main(filter_idle=False):
     # Configure parameters for each site
     site_configs = [
-        {'filename': '../caltech.json', 'chargers': 10, 'id': 'Site_A'},
-        {'filename': '../jpl.json', 'chargers': 15, 'id': 'Site_B'},
-        {'filename': '../office001.json', 'chargers': 8, 'id': 'Site_C'}
+        {'filename': './datasets/caltech.json', 'chargers': 10, 'id': 'Caltech'},
+        {'filename': './datasets/jpl.json', 'chargers': 15, 'id': 'JPL'},
+        {'filename': './datasets/office001.json', 'chargers': 8, 'id': 'Office1'}
     ]
     
     all_site_data = []
@@ -168,7 +185,7 @@ def main():
         print(f"Processing simulation for {config['id']}...")
         try:
             df = load_and_prepare_data(config['filename'])
-            site_hourly_records = simulate_site(df, config['chargers'], config['id'])
+            site_hourly_records = simulate_site(df, config['chargers'], config['id'], filter_idle=filter_idle)
             all_site_data.extend(site_hourly_records)
         except FileNotFoundError:
             print(f"Warning: File {config['filename']} not found. Skipping.")
@@ -183,4 +200,6 @@ def main():
         print("No simulation data collected.")
 
 if __name__ == '__main__':
-    main()
+    import sys
+    filter_idle = '--filter-idle' in sys.argv
+    main(filter_idle=filter_idle)
