@@ -1,7 +1,0 @@
---- Station Counts per Site ---
-Site_A (Caltech): 55 unique physical stations
-Site_B (JPL): 52 unique physical stations
-Site_C (Office 1): 8 unique physical stations
-
---- Total Unique Stations Across All Datasets ---
-Total: 115 unique station IDs
