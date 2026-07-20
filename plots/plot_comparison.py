@@ -1,10 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import os
 
-gt = pd.read_csv('ground_truth.csv', parse_dates=['timestamp_hour'])
-base = pd.read_csv('results_baseline.csv', parse_dates=['timestamp'])
-dt = pd.read_csv('results_dt.csv', parse_dates=['timestamp'])
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+gt = pd.read_csv(os.path.join(root, 'datasets', 'ground_truth.csv'), parse_dates=['timestamp_hour'])
+base = pd.read_csv(os.path.join(root, 'results', 'results_baseline.csv'), parse_dates=['timestamp'])
+dt = pd.read_csv(os.path.join(root, 'results', 'results_dt.csv'), parse_dates=['timestamp'])
 
 caltech_gt = gt[gt['site_id'] == 'Caltech'][['timestamp_hour', 'average_queue_length']].copy()
 jpl_gt = gt[gt['site_id'] == 'JPL'][['timestamp_hour', 'average_queue_length']].copy()
@@ -21,7 +23,6 @@ c_dt = dt.groupby(dt['t'] // 168)['sim_caltech_queue'].mean()
 j_dt = dt.groupby(dt['t'] // 168)['sim_jpl_queue'].mean()
 
 n = min(len(c_gt), len(c_base), len(c_dt))
-
 week_dates = caltech_gt.groupby('week')['timestamp_hour'].first().iloc[:n]
 
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
@@ -46,5 +47,5 @@ ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
 fig.autofmt_xdate()
 
 plt.tight_layout()
-plt.savefig('queue_comparison.png', dpi=150)
-print('Saved queue_comparison.png with date x-axis')
+plt.savefig(os.path.join(root, 'plots', 'queue_comparison.png'), dpi=150)
+print('Saved queue_comparison.png')
