@@ -91,11 +91,14 @@ class SimulationRunner:
 
             dt_output = self.dt.predict(sim_state, predictions)
 
-            total_demand = int(round(sim_state['total_incoming_demand']))
-            if use_dt:
-                routing = self.scheduler.route_dt_guided(total_demand, dt_output)
-            else:
-                routing = self.scheduler.route_baseline(total_demand)
+            gt_arrivals = {
+                site: float(self.env._site_data[site]['arrivals'][step])
+                for site in SITES
+            }
+            total_demand = int(round(sum(gt_arrivals.values())))
+            routing = self.scheduler.route(
+                gt_arrivals, dt_predictions=dt_output if use_dt else None
+            )
 
             service_times = {
                 site: sim_state[site]['service_time']

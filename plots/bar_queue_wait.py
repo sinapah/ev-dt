@@ -40,7 +40,7 @@ metric_labels = [
     '% hours with queue > 0',
     '95th percentile queue length',
     'Mean queue when non-zero',
-    'Total queue-hours (thousands)',
+    'Total queue-hours',
 ]
 
 fig, axes = plt.subplots(2, 4, figsize=(18, 8), sharex='col')
@@ -53,17 +53,17 @@ for row, site in enumerate(sites):
 
     for col, (key, label) in enumerate(zip(metrics, metric_labels)):
         ax = axes[row][col]
-        factor = 1000 if key == 'total_queue_hours' else 1
         vals = {
-            'Ground truth': gt_m[key] / factor,
-            'Baseline': bs_m[key] / factor,
-            'DT-assisted': dt_m[key] / factor,
+            'Ground truth': gt_m[key],
+            'Baseline': bs_m[key],
+            'DT-assisted': dt_m[key],
         }
         x_pos = np.arange(len(vals))
         for i, (name, v) in enumerate(vals.items()):
             ax.bar(i, v, color=colors[name], alpha=0.85, label=name if row == 0 and col == 0 else '')
-            ax.text(i, v * 1.02, f'{v:.1f}', ha='center', va='bottom', fontsize=8)
-        ax.set_title(f'{site} — {label}', fontsize=10)
+            txt = f'{v:.2f}' if v < 10 else f'{v:.1f}' if v < 1000 else f'{v:.0f}'
+            ax.text(i, v * 1.02, txt, ha='center', va='bottom', fontsize=8)
+        ax.set_title(f'{site} — {metric_labels[col]}', fontsize=10)
         ax.set_xticks(x_pos)
         ax.set_xticklabels([])
         ax.grid(axis='y', alpha=0.3)

@@ -178,8 +178,8 @@ def simulate_site(df, num_chargers, site_id, filter_idle=False, start_time=None)
 
 def main(filter_idle=False, start_time=None):
     site_configs = [
-        {'filename': './caltech.json', 'chargers': 25, 'id': 'Caltech'},
-        {'filename': './jpl.json', 'chargers': 25, 'id': 'JPL'},
+        {'filename': './caltech.json', 'chargers': 15, 'id': 'Caltech'},
+        {'filename': './jpl.json', 'chargers': 15, 'id': 'JPL'},
         {'filename': './office001.json', 'chargers': 8, 'id': 'Office1'}
     ]
 
