@@ -3,39 +3,39 @@ COMPREHENSIVE EVALUATION SUMMARY REPORT
 ================================================================================
 
 --- 1. Federated Demand Prediction ---
-  Caltech: MAE=2.0716, RMSE=3.5373, MAPE=60.68%, R²=0.4083
-  JPL: MAE=1.7956, RMSE=2.8259, MAPE=97.69%, R²=-0.0771
-  Overall: MAE=1.9336, RMSE=3.2014, MAPE=70.28%, R²=0.3546
+  Caltech: MAE=1.4091, RMSE=2.3149, MAPE=53.53%, R²=0.6601
+  JPL: MAE=1.0031, RMSE=1.8938, MAPE=57.54%, R²=0.8032
+  Overall: MAE=1.2061, RMSE=2.1149, MAPE=54.89%, R²=0.7414
 
 --- 2. Digital Twin Prediction ---
-  Caltech: Queue MAE=1.2800, Queue RMSE=2.3216, Wait MAE=0.3975, Wait RMSE=3.5878, Util MAE=0.0102, Util RMSE=0.0367
-  JPL: Queue MAE=0.9500, Queue RMSE=2.3875, Wait MAE=1.3371, Wait RMSE=6.3140, Util MAE=0.0375, Util RMSE=0.0856
+  Caltech: Queue MAE=1.0900, Queue RMSE=1.8710, Wait MAE=0.0569, Wait RMSE=1.2673, Util MAE=0.0016, Util RMSE=0.0118
+  JPL: Queue MAE=1.3540, Queue RMSE=2.6629, Wait MAE=0.0826, Wait RMSE=1.0299, Util MAE=0.0050, Util RMSE=0.0275
 
 --- 3. Scheduler Impact ---
-  Caltech_avg_queue: Baseline=27.61, DT-Assisted=21.94
-  Caltech_avg_wait: Baseline=490.5239, DT-Assisted=396.8954
-  Caltech_peak_queue: Baseline=58.0, DT-Assisted=47.0
-  Caltech_avg_util: Baseline=0.9125, DT-Assisted=0.8882
-  JPL_avg_queue: Baseline=7.835, DT-Assisted=9.495
-  JPL_avg_wait: Baseline=163.5483, DT-Assisted=199.759
-  JPL_peak_queue: Baseline=33.0, DT-Assisted=43.0
-  JPL_avg_util: Baseline=0.6392, DT-Assisted=0.693
-  avg_waiting_time: Baseline=327.0361, DT-Assisted=298.3272
-  avg_queue_length: Baseline=35.445, DT-Assisted=31.435
-  peak_queue_length: Baseline=81.0, DT-Assisted=81.0
-  avg_utilization: Baseline=0.7759, DT-Assisted=0.7906
-  avg_load_imbalance: Baseline=0.2834, DT-Assisted=0.2057
-  max_load_imbalance: Baseline=0.8409, DT-Assisted=0.8316
+  Caltech_avg_queue: Baseline=153.2506, DT-Assisted=184.6634
+  Caltech_avg_wait: Baseline=3226.8586, DT-Assisted=3934.7809
+  Caltech_peak_queue: Baseline=353.51, DT-Assisted=407.2
+  Caltech_avg_util: Baseline=0.96, DT-Assisted=0.9764
+  JPL_avg_queue: Baseline=179.7906, DT-Assisted=145.0507
+  JPL_avg_wait: Baseline=4016.9396, DT-Assisted=3273.5298
+  JPL_peak_queue: Baseline=372.59, DT-Assisted=308.61
+  JPL_avg_util: Baseline=0.941, DT-Assisted=0.9419
+  avg_waiting_time: Baseline=3621.8991, DT-Assisted=3604.1553
+  avg_queue_length: Baseline=333.0412, DT-Assisted=329.7141
+  peak_queue_length: Baseline=697.98, DT-Assisted=697.31
+  avg_utilization: Baseline=0.9505, DT-Assisted=0.9592
+  avg_load_imbalance: Baseline=0.0773, DT-Assisted=0.0365
+  max_load_imbalance: Baseline=0.9737, DT-Assisted=0.9001
 
 --- 4. Improvement Metrics (DT over Baseline) ---
-  Waiting Time Reduction (%): 8.78%
-  Queue Length Reduction (%): 11.31%
-  Peak Queue Reduction (%): 0.00%
-  Load Balance Improvement (%): 27.42%
+  Waiting Time Reduction (%): 0.49%
+  Queue Length Reduction (%): 1.00%
+  Peak Queue Reduction (%): 0.10%
+  Load Balance Improvement (%): 52.78%
 
 --- 5. Key Findings ---
-  FL Prediction: MAE=1.9336, RMSE=3.2014, R²=0.3546
-  Waiting Time Reduction (%): 8.78%
-  Queue Length Reduction (%): 11.31%
-  Peak Queue Reduction (%): 0.00%
-  Load Balance Improvement (%): 27.42%
+  FL Prediction: MAE=1.2061, RMSE=2.1149, R²=0.7414
+  Waiting Time Reduction (%): 0.49%
+  Queue Length Reduction (%): 1.00%
+  Peak Queue Reduction (%): 0.10%
+  Load Balance Improvement (%): 52.78%

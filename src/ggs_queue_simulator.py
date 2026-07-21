@@ -137,7 +137,7 @@ class GGsQueueSimulator:
             end_active = sum(1 for c in self.chargers[site] if c is not None)
 
             results[site] = {
-                'queue_length': float(end_queue),
+                'queue_length': avg_queue,
                 'waiting_time': avg_wait,
                 'utilization': min(1.0, avg_util),
                 'active_sessions': float(end_active),
