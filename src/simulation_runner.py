@@ -6,7 +6,7 @@ from edge_node import EdgeNode
 from federated_coordinator import FederatedCoordinator
 from digital_twin import DigitalTwin
 from scheduler import Scheduler
-from queue_simulator import QueueSimulator
+from ggs_queue_simulator import GGsQueueSimulator
 
 
 class SimulationRunner:
@@ -16,7 +16,10 @@ class SimulationRunner:
         self.coordinator = FederatedCoordinator()
         self.dt = DigitalTwin()
         self.scheduler = Scheduler()
-        self.queue_sim = QueueSimulator()
+        self.queue_sim = GGsQueueSimulator()
+        import pandas as pd
+        gt_df = pd.read_csv(data_path)
+        self.queue_sim.set_service_pools(gt_df)
 
     def compute_historical_split(self):
         self.env.reset()
@@ -61,11 +64,11 @@ class SimulationRunner:
         sim_state = {
             site: {
                 'arrivals': first_gt[site]['arrivals'],
-                'queue_length': self.queue_sim.queue[site],
+                'queue_length': first_gt[site]['queue_length'],
                 'waiting_time': first_gt[site]['waiting_time'],
                 'utilization': first_gt[site]['utilization'],
                 'service_time': first_gt[site]['service_time'],
-                'active_sessions': self.queue_sim.active_sessions[site],
+                'active_sessions': first_gt[site]['active_sessions'],
                 'completed_sessions': first_gt[site]['completed_sessions'],
             }
             for site in SITES

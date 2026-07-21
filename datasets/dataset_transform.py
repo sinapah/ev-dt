@@ -174,9 +174,9 @@ def simulate_site(df, num_chargers, site_id, filter_idle=False):
 def main(filter_idle=False):
     # Configure parameters for each site
     site_configs = [
-        {'filename': './datasets/caltech.json', 'chargers': 30, 'id': 'Caltech'},
-        {'filename': './datasets/jpl.json', 'chargers': 32, 'id': 'JPL'},
-        {'filename': './datasets/office001.json', 'chargers': 8, 'id': 'Office1'}
+        {'filename': './caltech.json', 'chargers': 10, 'id': 'Caltech'},
+        {'filename': './jpl.json', 'chargers': 10, 'id': 'JPL'},
+        {'filename': './office001.json', 'chargers': 8, 'id': 'Office1'}
     ]
     
     all_site_data = []
