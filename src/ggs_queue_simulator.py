@@ -17,6 +17,18 @@ class GGsQueueSimulator:
             self.chargers[site] = [None] * n
             self.queue[site] = deque()
 
+    def get_state(self):
+        return {
+            'chargers': {site: list(c) for site, c in self.chargers.items()},
+            'queue': {site: list(self.queue[site]) for site in SITES},
+            'current_time': self.current_time,
+        }
+
+    def set_state(self, state):
+        self.chargers = {site: list(state['chargers'][site]) for site in SITES}
+        self.queue = {site: deque(state['queue'][site]) for site in SITES}
+        self.current_time = state['current_time']
+
     def _drain_queue(self, site):
         n = self.num_chargers[site]
         while self.queue[site]:

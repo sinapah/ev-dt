@@ -27,8 +27,8 @@ class Scheduler:
         if dt_predictions is not None and flexible > 0:
             scores = {}
             for site in SITES:
-                c = dt_predictions[site]['congestion_score']
-                scores[site] = max(c, 0.01)
+                w = dt_predictions[site]['waiting_time']
+                scores[site] = max(w, 0.01)
             inv = {s: 1.0 / scores[s] for s in SITES}
             total_inv = sum(inv.values())
             caltech_share = inv['Caltech'] / total_inv if total_inv > 0 else hist
@@ -67,7 +67,7 @@ class Scheduler:
         if dt_predictions is not None and len(flexible) > 0:
             scores = {}
             for site in SITES:
-                scores[site] = max(dt_predictions[site]['congestion_score'], 0.01)
+                scores[site] = max(dt_predictions[site]['waiting_time'], 0.01)
             inv = {s: 1.0 / scores[s] for s in SITES}
             total_inv = sum(inv.values())
             caltech_share = inv['Caltech'] / total_inv
