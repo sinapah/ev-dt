@@ -89,11 +89,9 @@ class SimulationRunner:
         step = 0
 
         while True:
-            predictions = {}
-            for site in SITES:
-                predictions[site] = self.edge_nodes[site].predict_next_arrivals(
-                    timestamp=sim_state['timestamp']
-                )
+            predictions = self.coordinator.ensemble_predict(
+                self.edge_nodes, timestamp=sim_state['timestamp']
+            )
 
             sessions = self.session_pool.get_hour_sessions(step)
             total_demand = len(sessions)

@@ -1,5 +1,6 @@
-import copy
 import numpy as np
+
+from config import SITES
 
 
 class FederatedCoordinator:
@@ -7,19 +8,17 @@ class FederatedCoordinator:
         self.global_weights = None
 
     def aggregate(self, edge_nodes):
-        all_weights = [node.get_weights() for node in edge_nodes]
-        trained = [w for w in all_weights if w is not None]
-        if not trained:
-            return
-        if len(trained) < len(edge_nodes):
-            all_weights = trained
-        n_clients = len(all_weights)
-        avg = {}
-        for key in all_weights[0]:
-            avg[key] = np.mean(
-                [w[key] for w in all_weights],
-                axis=0
-            )
-        self.global_weights = avg
-        for node in edge_nodes:
-            node.set_weights(copy.deepcopy(avg))
+        pass
+
+    def ensemble_predict(self, edge_nodes, timestamp):
+        predictions = {}
+        for site in SITES:
+            site_preds = [edge_nodes[site].predict_next_arrivals(timestamp)]
+            other_preds = [
+                node.predict_next_arrivals(timestamp)
+                for s, node in edge_nodes.items()
+                if s != site
+            ]
+            all_preds = site_preds + other_preds
+            predictions[site] = float(np.mean(all_preds))
+        return predictions
