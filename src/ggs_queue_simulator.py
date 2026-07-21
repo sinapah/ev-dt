@@ -25,23 +25,24 @@ class GGsQueueSimulator:
             return float(np.random.choice(pool))
         return 240.0
 
-    def reset(self, initial_state):
+    def reset(self, initial_state=None):
         self.current_time = 0.0
         for site in SITES:
-            s = initial_state[site]
             n = self.num_chargers[site]
-            active = int(round(s['active_sessions']))
-            q_len = int(round(s['queue_length']))
-            active = min(active, n)
-
             self.chargers[site] = [None] * n
-            for i in range(active):
-                st = self._sample_service_time(site)
-                self.chargers[site][i] = np.random.uniform(0, st)
-
             self.queue[site] = deque()
-            for _ in range(q_len):
-                self.queue[site].append((self._sample_service_time(site), 0.0))
+
+    def _drain_queue(self, site):
+        n = self.num_chargers[site]
+        while self.queue[site]:
+            free_idx = next(
+                (i for i in range(n) if self.chargers[site][i] is None),
+                None
+            )
+            if free_idx is None:
+                break
+            svc_time, arr_time = self.queue[site].popleft()
+            self.chargers[site][free_idx] = self.current_time + svc_time
 
     def step(self, routed_arrivals, service_time_minutes=None):
         hour_start = self.current_time
@@ -55,6 +56,8 @@ class GGsQueueSimulator:
             for i in range(n):
                 if self.chargers[site][i] is not None and self.chargers[site][i] <= hour_start:
                     self.chargers[site][i] = None
+
+            self._drain_queue(site)
 
             if n_arrivals == 0 and len(self.queue[site]) == 0 and \
                     all(c is None for c in self.chargers[site]):

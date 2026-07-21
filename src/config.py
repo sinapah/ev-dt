@@ -1,5 +1,5 @@
 SITES = ['Caltech', 'JPL']
-NUM_CHARGERS = {'Caltech': 30, 'JPL': 32}
+NUM_CHARGERS = {'Caltech': 10, 'JPL': 10}
 FL_AGGREGATION_INTERVAL = 24
 
 SERVICE_TIME_COL = 'average_service_time_minutes'
