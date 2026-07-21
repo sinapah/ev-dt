@@ -1,12 +1,16 @@
+import os
+
 import numpy as np
 import pandas as pd
+
 from config import SITES, FL_AGGREGATION_INTERVAL
-from environment import Environment
-from edge_node import EdgeNode
-from federated_coordinator import FederatedCoordinator
 from digital_twin import DigitalTwin
-from scheduler import Scheduler
+from edge_node import EdgeNode
+from environment import Environment
+from federated_coordinator import FederatedCoordinator
 from ggs_queue_simulator import GGsQueueSimulator
+from scheduler import Scheduler
+from session_pool import SessionPool
 
 
 class SimulationRunner:
@@ -17,9 +21,8 @@ class SimulationRunner:
         self.dt = DigitalTwin()
         self.scheduler = Scheduler()
         self.queue_sim = GGsQueueSimulator()
-        import pandas as pd
-        gt_df = pd.read_csv(data_path)
-        self.queue_sim.set_service_pools(gt_df)
+        data_dir = os.path.dirname(os.path.abspath(data_path))
+        self.session_pool = SessionPool(data_dir)
 
     def compute_historical_split(self):
         self.env.reset()
@@ -59,7 +62,7 @@ class SimulationRunner:
             self.edge_nodes[site].history = {k: [] for k in self.edge_nodes[site].history}
 
         first_gt = self.env.step()
-        self.queue_sim.reset(first_gt)
+        self.queue_sim.reset()
 
         sim_state = {
             site: {
@@ -91,24 +94,13 @@ class SimulationRunner:
 
             dt_output = self.dt.predict(sim_state, predictions)
 
-            gt_arrivals = {
-                site: float(self.env._site_data[site]['arrivals'][step])
-                for site in SITES
-            }
-            total_demand = int(round(sum(gt_arrivals.values())))
-            routing = self.scheduler.route(
-                gt_arrivals, dt_predictions=dt_output if use_dt else None
+            sessions = self.session_pool.get_hour_sessions(step)
+            total_demand = len(sessions)
+            routing = self.scheduler.route_sessions(
+                sessions, dt_predictions=dt_output if use_dt else None
             )
 
-            service_times = {
-                site: sim_state[site]['service_time']
-                for site in SITES
-            }
-            routing_arrivals = {
-                site: float(routing[site])
-                for site in SITES
-            }
-            sim_next = self.queue_sim.step(routing_arrivals, service_times)
+            sim_next = self.queue_sim.step(routing)
 
             row = {
                 'timestamp': sim_state['timestamp'],
@@ -126,8 +118,8 @@ class SimulationRunner:
                 'jpl_dt_predicted_util': dt_output['JPL']['predicted_utilization'],
                 'caltech_congestion': dt_output['Caltech']['congestion_score'],
                 'jpl_congestion': dt_output['JPL']['congestion_score'],
-                'routed_to_caltech': routing['Caltech'],
-                'routed_to_jpl': routing['JPL'],
+                'routed_to_caltech': len(routing['Caltech']),
+                'routed_to_jpl': len(routing['JPL']),
                 'sim_caltech_queue': sim_next['Caltech']['queue_length'],
                 'sim_jpl_queue': sim_next['JPL']['queue_length'],
                 'sim_caltech_wait': sim_next['Caltech']['waiting_time'],
@@ -147,7 +139,7 @@ class SimulationRunner:
 
             sim_state = {
                 site: {
-                    'arrivals': routing[site],
+                    'arrivals': len(routing[site]),
                     'queue_length': sim_next[site]['queue_length'],
                     'waiting_time': sim_next[site]['waiting_time'],
                     'utilization': sim_next[site]['utilization'],
@@ -158,7 +150,7 @@ class SimulationRunner:
                 for site in SITES
             }
             sim_state['timestamp'] = next_gt['timestamp']
-            sim_state['total_incoming_demand'] = next_gt['total_incoming_demand']
+            sim_state['total_incoming_demand'] = total_demand
 
             for site in SITES:
                 self.edge_nodes[site].update_history(sim_state)

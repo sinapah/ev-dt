@@ -1,5 +1,5 @@
-import numpy as np
 from collections import deque
+
 from config import SITES, NUM_CHARGERS
 
 
@@ -8,22 +8,7 @@ class GGsQueueSimulator:
         self.num_chargers = dict(NUM_CHARGERS)
         self.chargers = {site: [None] * n for site, n in self.num_chargers.items()}
         self.queue = {site: deque() for site in SITES}
-        self.service_pool = {}
         self.current_time = 0.0
-
-    def set_service_pools(self, gt_df):
-        for site in SITES:
-            vals = gt_df[
-                (gt_df['site_id'] == site) &
-                gt_df['average_service_time_minutes'].notna()
-            ]['average_service_time_minutes'].values
-            self.service_pool[site] = vals if len(vals) > 0 else np.array([240.0])
-
-    def _sample_service_time(self, site):
-        pool = self.service_pool.get(site)
-        if pool is not None and len(pool) > 0:
-            return float(np.random.choice(pool))
-        return 240.0
 
     def reset(self, initial_state=None):
         self.current_time = 0.0
@@ -44,13 +29,12 @@ class GGsQueueSimulator:
             svc_time, arr_time = self.queue[site].popleft()
             self.chargers[site][free_idx] = self.current_time + svc_time
 
-    def step(self, routed_arrivals, service_time_minutes=None):
+    def step(self, per_site_sessions):
         hour_start = self.current_time
         hour_end = hour_start + 60.0
         results = {}
 
         for site in SITES:
-            n_arrivals = int(routed_arrivals.get(site, 0))
             n = self.num_chargers[site]
 
             for i in range(n):
@@ -59,7 +43,9 @@ class GGsQueueSimulator:
 
             self._drain_queue(site)
 
-            if n_arrivals == 0 and len(self.queue[site]) == 0 and \
+            site_sessions = per_site_sessions.get(site, [])
+
+            if len(site_sessions) == 0 and len(self.queue[site]) == 0 and \
                     all(c is None for c in self.chargers[site]):
                 results[site] = {
                     'queue_length': 0.0,
@@ -71,14 +57,10 @@ class GGsQueueSimulator:
                 continue
 
             arrival_events = []
-            t = hour_start
-            for _ in range(n_arrivals):
-                rate = max(n_arrivals / 60.0, 1e-6)
-                interarrival = np.random.exponential(1.0 / rate)
-                t += interarrival
-                if t > hour_end:
-                    break
-                arrival_events.append((t, self._sample_service_time(site)))
+            for session in site_sessions:
+                t = hour_start + session['arrival_minute']
+                if t <= hour_end:
+                    arrival_events.append((t, session['service_time_minutes']))
 
             events = [(t, 'arrival', st) for t, st in arrival_events]
             for i in range(n):
@@ -141,9 +123,6 @@ class GGsQueueSimulator:
 
             end_queue = len(self.queue[site])
             end_active = sum(1 for c in self.chargers[site] if c is not None)
-
-            # Carry forward: update charger end_times that extend beyond this hour
-            # (no change needed — end_times are already absolute and persist)
 
             results[site] = {
                 'queue_length': float(end_queue),
