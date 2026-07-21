@@ -1,0 +1,3 @@
+site,queue_mae,queue_rmse,wait_mae,wait_rmse,util_mae,util_rmse
+Caltech,1.47,2.7839,0.4008,2.3494,0.0137,0.0437
+JPL,1.28,2.2271,0.4773,2.068,0.0339,0.0674

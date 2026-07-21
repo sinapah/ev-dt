@@ -12,6 +12,9 @@ from ggs_queue_simulator import GGsQueueSimulator
 from scheduler import Scheduler
 from session_pool import SessionPool
 
+from evaluation import run_full_evaluation
+from plots.generate_plots import generate_all_plots
+
 
 class SimulationRunner:
     def __init__(self, data_path='ground_truth.csv'):
@@ -170,97 +173,40 @@ class SimulationRunner:
         df = pd.DataFrame(results)
         return df
 
-    def compute_metrics(self, df):
-        metrics = {}
-        for site in SITES:
-            prefix = site.lower()
-            actual = df[f'ground_truth_{prefix}_arrivals']
-            predicted = df[f'{prefix}_predicted_arrivals']
-            errors = actual - predicted
-            mae = float(np.mean(np.abs(errors)))
-            rmse = float(np.sqrt(np.mean(errors ** 2)))
-            non_zero = actual[actual > 0]
-            if len(non_zero) > 0:
-                mape = float(np.mean(np.abs((non_zero - predicted[actual > 0]) / non_zero)) * 100)
-            else:
-                mape = float('nan')
-            metrics[f'{site}_prediction_mae'] = round(mae, 4)
-            metrics[f'{site}_prediction_rmse'] = round(rmse, 4)
-            metrics[f'{site}_prediction_mape'] = round(mape, 4)
-        for site in SITES:
-            prefix = site.lower()
-            actual_q = df[f'sim_{prefix}_queue']
-            pred_q = df[f'{prefix}_dt_predicted_queue']
-            metrics[f'{site}_queue_error'] = round(float(np.mean(np.abs(actual_q - pred_q))), 4)
-            actual_w = df[f'sim_{prefix}_wait']
-            pred_w = df[f'{prefix}_dt_predicted_wait']
-            metrics[f'{site}_wait_error'] = round(float(np.mean(np.abs(actual_w - pred_w))), 4)
-            actual_u = df[f'sim_{prefix}_util']
-            pred_u = df[f'{prefix}_dt_predicted_util']
-            metrics[f'{site}_util_error'] = round(float(np.mean(np.abs(actual_u - pred_u))), 4)
-        metrics['avg_routed_to_caltech'] = round(float(df['routed_to_caltech'].mean()), 4)
-        metrics['avg_routed_to_jpl'] = round(float(df['routed_to_jpl'].mean()), 4)
-        balance = df['sim_caltech_util'] - df['sim_jpl_util']
-        metrics['util_balance_mae'] = round(float(np.mean(np.abs(balance))), 4)
-
-        all_queues = []
-        for site in SITES:
-            prefix = site.lower()
-            q = df[f'sim_{prefix}_queue']
-            all_queues.append(q)
-
-            metrics[f'{site}_pct_hours_queued'] = round(float((q > 0).mean() * 100), 2)
-            metrics[f'{site}_queue_p95'] = round(float(q.quantile(0.95)), 2)
-            metrics[f'{site}_queue_p99'] = round(float(q.quantile(0.99)), 2)
-            metrics[f'{site}_queue_max'] = round(float(q.max()), 2)
-            nonzero = q[q > 0]
-            metrics[f'{site}_queue_mean_cond'] = round(float(nonzero.mean()), 2) if len(nonzero) > 0 else 0.0
-            metrics[f'{site}_total_queue_hours'] = round(float(q.sum()), 2)
-
-        combined = pd.concat(all_queues, axis=1).sum(axis=1)
-        metrics['total_pct_hours_queued'] = round(float((combined > 0).mean() * 100), 2)
-        metrics['total_queue_p95'] = round(float(combined.quantile(0.95)), 2)
-        metrics['total_queue_p99'] = round(float(combined.quantile(0.99)), 2)
-        metrics['total_queue_max'] = round(float(combined.max()), 2)
-        metrics['total_queue_mean_cond'] = round(float(combined[combined > 0].mean()), 2)
-        metrics['total_queue_hours'] = round(float(combined.sum()), 2)
-        return metrics
-
     def run(self, train_steps=None, eval_steps=None):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_dir = os.path.join(root, 'results')
+        plots_dir = os.path.join(root, 'plots')
 
         self.train(max_steps=train_steps)
         print("\nEvaluating with DT-guided scheduler...")
         df_dt = self.evaluate(max_steps=eval_steps, use_dt=True)
         print(f"DT evaluation: {len(df_dt)} timesteps")
-        if self.dt.prediction_errors:
-            pd.DataFrame(self.dt.prediction_errors).to_csv(
-                os.path.join(results_dir, 'prediction_errors_dt.csv'), index=False
-            )
-            self.dt.prediction_errors = []
+        pred_errors_dt = list(self.dt.prediction_errors)
+        self.dt.prediction_errors = []
 
         print("\nEvaluating with baseline scheduler (no DT)...")
         df_baseline = self.evaluate(max_steps=eval_steps, use_dt=False)
         print(f"Baseline evaluation: {len(df_baseline)} timesteps")
-        if self.dt.prediction_errors:
-            pd.DataFrame(self.dt.prediction_errors).to_csv(
-                os.path.join(results_dir, 'prediction_errors_baseline.csv'), index=False
-            )
-            self.dt.prediction_errors = []
+        pred_errors_baseline = list(self.dt.prediction_errors)
+        self.dt.prediction_errors = []
 
-        metrics_dt = self.compute_metrics(df_dt)
-        metrics_base = self.compute_metrics(df_baseline)
-        rows = []
-        for k in metrics_dt:
-            rows.append({'Metric': k, 'DT_Assisted': metrics_dt[k], 'Baseline': metrics_base[k]})
-        summary = pd.DataFrame(rows)
-        print("\n" + "=" * 80)
-        print("EVALUATION SUMMARY")
-        print("=" * 80)
-        pd.set_option('display.max_rows', None)
-        pd.set_option('display.width', 120)
-        print(summary.to_string(index=False))
-        pd.reset_option('display.max_rows')
-        pd.reset_option('display.width')
-        return df_dt, df_baseline, summary
+        df_dt.to_csv(os.path.join(results_dir, 'results_dt.csv'), index=False)
+        df_baseline.to_csv(os.path.join(results_dir, 'results_baseline.csv'), index=False)
+        pd.DataFrame(pred_errors_dt).to_csv(
+            os.path.join(results_dir, 'prediction_errors_dt.csv'), index=False
+        )
+        pd.DataFrame(pred_errors_baseline).to_csv(
+            os.path.join(results_dir, 'prediction_errors_baseline.csv'), index=False
+        )
+
+        run_full_evaluation(df_dt, df_baseline,
+                           pd.DataFrame(pred_errors_dt),
+                           pd.DataFrame(pred_errors_baseline),
+                           results_dir)
+
+        generate_all_plots(df_dt, df_baseline,
+                          pd.DataFrame(pred_errors_dt),
+                          plots_dir)
+
+        return df_dt, df_baseline
