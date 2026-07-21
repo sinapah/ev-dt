@@ -193,19 +193,30 @@ class SimulationRunner:
             metrics[f'{site}_util_error'] = round(float(np.mean(np.abs(actual_u - pred_u))), 4)
         metrics['avg_routed_to_caltech'] = round(float(df['routed_to_caltech'].mean()), 4)
         metrics['avg_routed_to_jpl'] = round(float(df['routed_to_jpl'].mean()), 4)
-        wait_cols = [c for c in df.columns if c.startswith('sim_') and c.endswith('_wait')]
-        if wait_cols:
-            metrics['avg_sim_wait'] = round(float(df[wait_cols].mean(axis=1).mean()), 4)
-        queue_cols = [c for c in df.columns if c.startswith('sim_') and c.endswith('_queue')]
-        if queue_cols:
-            metrics['avg_sim_queue'] = round(float(df[queue_cols].mean(axis=1).mean()), 4)
-        util_cols = [c for c in df.columns if c.startswith('sim_') and c.endswith('_util')]
-        if util_cols:
-            metrics['avg_sim_util'] = round(float(df[util_cols].mean(axis=1).mean()), 4)
-        metrics['peak_congestion_caltech'] = round(float(df['sim_caltech_util'].max()), 4)
-        metrics['peak_congestion_jpl'] = round(float(df['sim_jpl_util'].max()), 4)
         balance = df['sim_caltech_util'] - df['sim_jpl_util']
         metrics['util_balance_mae'] = round(float(np.mean(np.abs(balance))), 4)
+
+        all_queues = []
+        for site in SITES:
+            prefix = site.lower()
+            q = df[f'sim_{prefix}_queue']
+            all_queues.append(q)
+
+            metrics[f'{site}_pct_hours_queued'] = round(float((q > 0).mean() * 100), 2)
+            metrics[f'{site}_queue_p95'] = round(float(q.quantile(0.95)), 2)
+            metrics[f'{site}_queue_p99'] = round(float(q.quantile(0.99)), 2)
+            metrics[f'{site}_queue_max'] = round(float(q.max()), 2)
+            nonzero = q[q > 0]
+            metrics[f'{site}_queue_mean_cond'] = round(float(nonzero.mean()), 2) if len(nonzero) > 0 else 0.0
+            metrics[f'{site}_total_queue_hours'] = round(float(q.sum()), 2)
+
+        combined = pd.concat(all_queues, axis=1).sum(axis=1)
+        metrics['total_pct_hours_queued'] = round(float((combined > 0).mean() * 100), 2)
+        metrics['total_queue_p95'] = round(float(combined.quantile(0.95)), 2)
+        metrics['total_queue_p99'] = round(float(combined.quantile(0.99)), 2)
+        metrics['total_queue_max'] = round(float(combined.max()), 2)
+        metrics['total_queue_mean_cond'] = round(float(combined[combined > 0].mean()), 2)
+        metrics['total_queue_hours'] = round(float(combined.sum()), 2)
         return metrics
 
     def run(self, train_steps=None, eval_steps=None):

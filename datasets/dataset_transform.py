@@ -24,7 +24,7 @@ def load_and_prepare_data(filepath):
     df = df.sort_values('connectionTime').reset_index(drop=True)
     return df
 
-def simulate_site(df, num_chargers, site_id, filter_idle=False):
+def simulate_site(df, num_chargers, site_id, filter_idle=False, start_time=None):
     """
     Runs a Discrete-Event Simulation for a single charging site and 
     tracks time-weighted metrics for exact hourly aggregation.
@@ -33,7 +33,12 @@ def simulate_site(df, num_chargers, site_id, filter_idle=False):
     ----------
     filter_idle : bool
         If True, skips hours with no arrivals, no ongoing sessions, and no completions.
+    start_time : datetime or None
+        If provided, only sessions with connectionTime >= start_time are simulated.
     """
+    if start_time is not None:
+        df = df[df['connectionTime'] >= start_time].copy()
+
     # Event loop structures
     # Priority Queue elements: (timestamp, event_type, tie_breaker, data)
     # event_type: 0 for DEPARTURE (processed first if timestamps match), 1 for ARRIVAL
@@ -171,26 +176,40 @@ def simulate_site(df, num_chargers, site_id, filter_idle=False):
         
     return hourly_records
 
-def main(filter_idle=False):
-    # Configure parameters for each site
+def main(filter_idle=False, start_time=None):
     site_configs = [
-        {'filename': './caltech.json', 'chargers': 10, 'id': 'Caltech'},
-        {'filename': './jpl.json', 'chargers': 10, 'id': 'JPL'},
+        {'filename': './caltech.json', 'chargers': 25, 'id': 'Caltech'},
+        {'filename': './jpl.json', 'chargers': 25, 'id': 'JPL'},
         {'filename': './office001.json', 'chargers': 8, 'id': 'Office1'}
     ]
-    
-    all_site_data = []
-    
-    for config in site_configs:
-        print(f"Processing simulation for {config['id']}...")
+
+    loaded = {}
+    for cfg in site_configs:
         try:
-            df = load_and_prepare_data(config['filename'])
-            site_hourly_records = simulate_site(df, config['chargers'], config['id'], filter_idle=filter_idle)
-            all_site_data.extend(site_hourly_records)
+            loaded[cfg['id']] = load_and_prepare_data(cfg['filename'])
         except FileNotFoundError:
-            print(f"Warning: File {config['filename']} not found. Skipping.")
-            
-    # Compile into a single DataFrame and export to CSV
+            print(f"Warning: File {cfg['filename']} not found. Skipping.")
+
+    if start_time is None and len(loaded) >= 2:
+        cal_min = loaded['Caltech']['connectionTime'].min()
+        jpl_min = loaded['JPL']['connectionTime'].min()
+        common_start = max(cal_min, jpl_min)
+        print(f"Auto-detected common start time: {common_start}")
+    else:
+        common_start = start_time
+
+    all_site_data = []
+    for cfg in site_configs:
+        if cfg['id'] not in loaded:
+            continue
+        print(f"Processing simulation for {cfg['id']} (start={common_start})...")
+        df = loaded[cfg['id']]
+        site_hourly_records = simulate_site(
+            df, cfg['chargers'], cfg['id'],
+            filter_idle=filter_idle, start_time=common_start
+        )
+        all_site_data.extend(site_hourly_records)
+
     if all_site_data:
         final_df = pd.DataFrame(all_site_data)
         output_filename = 'hourly_charging_telemetry.csv'
