@@ -8,48 +8,73 @@ gt = pd.read_csv(os.path.join(root, 'datasets', 'ground_truth.csv'))
 base = pd.read_csv(os.path.join(root, 'results', 'results_baseline.csv'))
 dt = pd.read_csv(os.path.join(root, 'results', 'results_dt.csv'))
 
-caltech_gt_q = gt[gt['site_id'] == 'Caltech']['average_queue_length'].mean()
-jpl_gt_q = gt[gt['site_id'] == 'JPL']['average_queue_length'].mean()
-caltech_gt_w = gt[gt['site_id'] == 'Caltech']['average_waiting_time_minutes'].mean()
-jpl_gt_w = gt[gt['site_id'] == 'JPL']['average_waiting_time_minutes'].mean()
-
-caltech_base_q = base['sim_caltech_queue'].mean()
-jpl_base_q = base['sim_jpl_queue'].mean()
-caltech_dt_q = dt['sim_caltech_queue'].mean()
-jpl_dt_q = dt['sim_jpl_queue'].mean()
-
-caltech_base_w = base['sim_caltech_wait'].mean()
-jpl_base_w = base['sim_jpl_wait'].mean()
-caltech_dt_w = dt['sim_caltech_wait'].mean()
-jpl_dt_w = dt['sim_jpl_wait'].mean()
-
 sites = ['Caltech', 'JPL']
-x = np.arange(len(sites))
-width = 0.25
+colors = {'Ground truth': '#666666', 'Baseline': '#ff9900', 'DT-assisted': '#33aa33'}
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
+def compute_site_metrics(df, prefix):
+    q = df[f'sim_{prefix}_queue']
+    nonzero = q[q > 0]
+    return {
+        'pct_queued': (q > 0).mean() * 100,
+        'p95': q.quantile(0.95),
+        'p99': q.quantile(0.99),
+        'max': q.max(),
+        'mean_cond': nonzero.mean() if len(nonzero) > 0 else 0,
+        'total_queue_hours': q.sum(),
+    }
 
-ax1.bar(x - width, [caltech_gt_q, jpl_gt_q], width, label='Ground truth', color='gray', alpha=0.8)
-ax1.bar(x, [caltech_base_q, jpl_base_q], width, label='Baseline routing', color='orange', alpha=0.8)
-ax1.bar(x + width, [caltech_dt_q, jpl_dt_q], width, label='DT-assisted routing', color='green', alpha=0.8)
-ax1.set_ylabel('Mean queue length')
-ax1.set_title('Average queue length by site and routing strategy')
-ax1.set_xticks(x)
-ax1.set_xticklabels(sites)
-ax1.legend()
-ax1.grid(axis='y', alpha=0.3)
+def compute_gt_metrics(site):
+    q = gt[gt['site_id'] == site]['average_queue_length']
+    nonzero = q[q > 0]
+    return {
+        'pct_queued': (q > 0).mean() * 100,
+        'p95': q.quantile(0.95),
+        'p99': q.quantile(0.99),
+        'max': q.max(),
+        'mean_cond': nonzero.mean() if len(nonzero) > 0 else 0,
+        'total_queue_hours': q.sum(),
+    }
 
-ax2.bar(x - width, [caltech_gt_w, jpl_gt_w], width, label='Ground truth', color='gray', alpha=0.8)
-ax2.bar(x, [caltech_base_w, jpl_base_w], width, label='Baseline routing', color='orange', alpha=0.8)
-ax2.bar(x + width, [caltech_dt_w, jpl_dt_w], width, label='DT-assisted routing', color='green', alpha=0.8)
-ax2.set_ylabel('Mean waiting time (minutes)')
-ax2.set_title('Average waiting time by site and routing strategy')
-ax2.set_xticks(x)
-ax2.set_xticklabels(sites)
-ax2.legend()
-ax2.grid(axis='y', alpha=0.3)
+metrics = ['pct_queued', 'p95', 'mean_cond', 'total_queue_hours']
+metric_labels = [
+    '% hours with queue > 0',
+    '95th percentile queue length',
+    'Mean queue when non-zero',
+    'Total queue-hours (thousands)',
+]
 
-plt.tight_layout()
+fig, axes = plt.subplots(2, 4, figsize=(18, 8), sharex='col')
+
+for row, site in enumerate(sites):
+    prefix = site.lower()
+    gt_m = compute_gt_metrics(site)
+    bs_m = compute_site_metrics(base, prefix)
+    dt_m = compute_site_metrics(dt, prefix)
+
+    for col, (key, label) in enumerate(zip(metrics, metric_labels)):
+        ax = axes[row][col]
+        factor = 1000 if key == 'total_queue_hours' else 1
+        vals = {
+            'Ground truth': gt_m[key] / factor,
+            'Baseline': bs_m[key] / factor,
+            'DT-assisted': dt_m[key] / factor,
+        }
+        x_pos = np.arange(len(vals))
+        for i, (name, v) in enumerate(vals.items()):
+            ax.bar(i, v, color=colors[name], alpha=0.85, label=name if row == 0 and col == 0 else '')
+            ax.text(i, v * 1.02, f'{v:.1f}', ha='center', va='bottom', fontsize=8)
+        ax.set_title(f'{site} — {label}', fontsize=10)
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([])
+        ax.grid(axis='y', alpha=0.3)
+        if row == 0:
+            ax.set_xlabel('')
+        if col == 0:
+            ax.set_ylabel('Value')
+
+handles = [plt.Rectangle((0,0),1,1, color=colors[n]) for n in colors]
+fig.legend(handles, colors.keys(), loc='lower center', ncol=3, fontsize=11)
+plt.tight_layout(rect=[0, 0.05, 1, 1])
 out = os.path.join(root, 'plots', 'bar_queue_wait.png')
 plt.savefig(out, dpi=150)
 print(f'Saved {out}')
