@@ -1,6 +1,6 @@
 import numpy as np
 from collections import defaultdict
-from config import FEATURE_LAGS, STATE_FIELDS
+from config import FEATURE_LAGS, ROLLING_WINDOWS, STATE_FIELDS
 from model import ForecastingModel
 
 
@@ -24,26 +24,32 @@ class EdgeNode:
         return ts.astype('datetime64[D]').astype(int) % 7
 
     def _build_features(self, timestamp=None):
-        if len(self.history['arrivals']) < max(max(v) for v in FEATURE_LAGS.values()):
-            return None
+        n = len(self.history['arrivals'])
         feats = []
         for field, lags in FEATURE_LAGS.items():
             series = self.history[field]
             for lag in lags:
-                feats.append(series[-lag] if len(series) > lag else 0.0)
+                feats.append(series[-lag] if n > lag else 0.0)
+        arrivals = self.history['arrivals']
+        for w in ROLLING_WINDOWS:
+            feats.append(np.mean(arrivals[-w:]) if n >= w else 0.0)
+        feats.append(np.sum(arrivals[-24:]) if n >= 24 else 0.0)
         ts = timestamp if timestamp else self.history['timestamps'][-1]
         feats.append(self._ts_hour(ts) / 23.0)
         feats.append(self._ts_dow(ts) / 6.0)
+        feats.append(1.0 if self._ts_dow(ts) >= 5 else 0.0)
         return np.array(feats, dtype=np.float32)
 
     def predict_next_arrivals(self, timestamp=None):
         feats = self._build_features(timestamp)
-        if feats is None:
+        if not self.model.trained:
             return 0.0
         return max(0.0, self.model.predict(feats))
 
     def train_local(self):
-        min_lookback = max(max(v) for v in FEATURE_LAGS.values()) + 1
+        max_lag = max(v for lags in FEATURE_LAGS.values() for v in lags)
+        min_rolling = max(ROLLING_WINDOWS)
+        min_lookback = max(max_lag, min_rolling)
         n = len(self.history['arrivals'])
         if n < min_lookback + 1:
             return
@@ -54,8 +60,13 @@ class EdgeNode:
                 series = self.history[field]
                 for lag in lags:
                     feats.append(series[t - lag])
+            arrivals = self.history['arrivals']
+            for w in ROLLING_WINDOWS:
+                feats.append(np.mean(arrivals[t - w:t]))
+            feats.append(np.sum(arrivals[t - 24:t]))
             feats.append(self._ts_hour(self.history['timestamps'][t]) / 23.0)
             feats.append(self._ts_dow(self.history['timestamps'][t]) / 6.0)
+            feats.append(1.0 if self._ts_dow(self.history['timestamps'][t]) >= 5 else 0.0)
             X_list.append(feats)
             y_list.append(self.history['arrivals'][t])
         if len(X_list) < 5:

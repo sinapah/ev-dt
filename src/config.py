@@ -12,10 +12,21 @@ WAIT_COL = 'average_waiting_time_minutes'
 STATE_FIELDS = ['arrivals', 'queue_length', 'waiting_time', 'utilization']
 
 FEATURE_LAGS = {
-    'arrivals': [1, 2, 3, 24],
+    'arrivals': [1, 2, 3, 24, 168],
     'queue_length': [1, 24],
     'utilization': [1, 24],
 }
+
+ROLLING_WINDOWS = [6, 24]
+
+FEATURE_NAMES = (
+    [f'arrivals_lag_{l}' for l in FEATURE_LAGS['arrivals']]
+    + [f'queue_lag_{l}' for l in FEATURE_LAGS['queue_length']]
+    + [f'util_lag_{l}' for l in FEATURE_LAGS['utilization']]
+    + [f'arrivals_rolling_mean_{w}' for w in ROLLING_WINDOWS]
+    + ['arrivals_daily_total']
+    + ['hour', 'day_of_week', 'is_weekend']
+)
 
 COLUMN_MAP = {
     'arrivals_per_hour': 'arrivals',
