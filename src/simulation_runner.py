@@ -92,15 +92,29 @@ class SimulationRunner:
                     timestamp=sim_state['timestamp']
                 )
 
-            dt_output = self.dt.predict(sim_state, predictions)
-
             sessions = self.session_pool.get_hour_sessions(step)
             total_demand = len(sessions)
+
+            dt_output = self.dt.predict(sim_state, predictions, self.queue_sim, self.scheduler)
             routing = self.scheduler.route_sessions(
                 sessions, dt_predictions=dt_output if use_dt else None
             )
 
             sim_next = self.queue_sim.step(routing)
+
+            for site in SITES:
+                self.dt.prediction_errors.append({
+                    'step': step,
+                    'timestamp': sim_state['timestamp'],
+                    'site': site,
+                    'predicted_queue': dt_output[site]['queue_length'],
+                    'actual_queue': sim_next[site]['queue_length'],
+                    'predicted_wait': dt_output[site]['waiting_time'],
+                    'actual_wait': sim_next[site]['waiting_time'],
+                    'predicted_util': dt_output[site]['utilization'],
+                    'actual_util': sim_next[site]['utilization'],
+                    'use_dt': use_dt,
+                })
 
             row = {
                 'timestamp': sim_state['timestamp'],
@@ -110,14 +124,12 @@ class SimulationRunner:
                 'ground_truth_jpl_arrivals': float(self.env._site_data['JPL']['arrivals'][step]),
                 'caltech_predicted_arrivals': predictions['Caltech'],
                 'jpl_predicted_arrivals': predictions['JPL'],
-                'caltech_dt_predicted_queue': dt_output['Caltech']['predicted_queue'],
-                'jpl_dt_predicted_queue': dt_output['JPL']['predicted_queue'],
-                'caltech_dt_predicted_wait': dt_output['Caltech']['predicted_waiting_time'],
-                'jpl_dt_predicted_wait': dt_output['JPL']['predicted_waiting_time'],
-                'caltech_dt_predicted_util': dt_output['Caltech']['predicted_utilization'],
-                'jpl_dt_predicted_util': dt_output['JPL']['predicted_utilization'],
-                'caltech_congestion': dt_output['Caltech']['congestion_score'],
-                'jpl_congestion': dt_output['JPL']['congestion_score'],
+                'caltech_dt_predicted_queue': dt_output['Caltech']['queue_length'],
+                'jpl_dt_predicted_queue': dt_output['JPL']['queue_length'],
+                'caltech_dt_predicted_wait': dt_output['Caltech']['waiting_time'],
+                'jpl_dt_predicted_wait': dt_output['JPL']['waiting_time'],
+                'caltech_dt_predicted_util': dt_output['Caltech']['utilization'],
+                'jpl_dt_predicted_util': dt_output['JPL']['utilization'],
                 'routed_to_caltech': len(routing['Caltech']),
                 'routed_to_jpl': len(routing['JPL']),
                 'sim_caltech_queue': sim_next['Caltech']['queue_length'],
@@ -215,13 +227,28 @@ class SimulationRunner:
         return metrics
 
     def run(self, train_steps=None, eval_steps=None):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results_dir = os.path.join(root, 'results')
+
         self.train(max_steps=train_steps)
         print("\nEvaluating with DT-guided scheduler...")
         df_dt = self.evaluate(max_steps=eval_steps, use_dt=True)
         print(f"DT evaluation: {len(df_dt)} timesteps")
+        if self.dt.prediction_errors:
+            pd.DataFrame(self.dt.prediction_errors).to_csv(
+                os.path.join(results_dir, 'prediction_errors_dt.csv'), index=False
+            )
+            self.dt.prediction_errors = []
+
         print("\nEvaluating with baseline scheduler (no DT)...")
         df_baseline = self.evaluate(max_steps=eval_steps, use_dt=False)
         print(f"Baseline evaluation: {len(df_baseline)} timesteps")
+        if self.dt.prediction_errors:
+            pd.DataFrame(self.dt.prediction_errors).to_csv(
+                os.path.join(results_dir, 'prediction_errors_baseline.csv'), index=False
+            )
+            self.dt.prediction_errors = []
+
         metrics_dt = self.compute_metrics(df_dt)
         metrics_base = self.compute_metrics(df_baseline)
         rows = []
