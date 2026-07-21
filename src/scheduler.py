@@ -1,33 +1,41 @@
-import numpy as np
-from config import SITES
+from config import SITES, CAPTIVE_FRACTION
 
 
 class Scheduler:
     def __init__(self, historical_split=None):
         self.historical_split = historical_split
+        self.captive_fraction = CAPTIVE_FRACTION
 
     def set_historical_split(self, caltech_share):
         self.historical_split = caltech_share
 
-    def route_baseline(self, total_demand):
-        if self.historical_split is None:
-            caltech_share = 0.5
-        else:
-            caltech_share = self.historical_split
-        caltech_routed = round(total_demand * caltech_share)
-        jpl_routed = total_demand - caltech_routed
-        return {'Caltech': caltech_routed, 'JPL': jpl_routed}
+    def route(self, arrivals, dt_predictions=None):
+        hist = self.historical_split if self.historical_split is not None else 0.5
 
-    def route_dt_guided(self, total_demand, dt_predictions):
-        scores = {}
+        captive = {}
         for site in SITES:
-            c = dt_predictions[site]['congestion_score']
-            scores[site] = max(c, 0.01)
-        inv = {s: 1.0 / scores[s] for s in SITES}
-        total_inv = sum(inv.values())
-        if total_inv == 0:
-            return self.route_baseline(total_demand)
-        caltech_share = inv['Caltech'] / total_inv
-        caltech_routed = round(total_demand * caltech_share)
-        jpl_routed = total_demand - caltech_routed
-        return {'Caltech': caltech_routed, 'JPL': jpl_routed}
+            captive[site] = int(round(arrivals[site] * self.captive_fraction))
+        while sum(captive.values()) > sum(arrivals.values()):
+            site = max(SITES, key=lambda s: captive[s])
+            if captive[site] > 0:
+                captive[site] -= 1
+
+        flexible = int(round(sum(arrivals.values()) - sum(captive.values())))
+        if flexible < 0:
+            flexible = 0
+
+        if dt_predictions is not None and flexible > 0:
+            scores = {}
+            for site in SITES:
+                c = dt_predictions[site]['congestion_score']
+                scores[site] = max(c, 0.01)
+            inv = {s: 1.0 / scores[s] for s in SITES}
+            total_inv = sum(inv.values())
+            caltech_share = inv['Caltech'] / total_inv if total_inv > 0 else hist
+        else:
+            caltech_share = hist
+
+        flex_cal = round(flexible * caltech_share)
+        flex_jpl = flexible - flex_cal
+
+        return {'Caltech': captive['Caltech'] + flex_cal, 'JPL': captive['JPL'] + flex_jpl}
