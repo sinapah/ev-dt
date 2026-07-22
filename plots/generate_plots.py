@@ -106,7 +106,82 @@ def plot_dt_predictions(pred_errors_df, output_dir):
             print(f"Saved {path}")
 
 
-def plot_scheduler_comparison(df_dt, df_baseline, output_dir):
+def plot_synthetic_validation(df_disconnected, output_dir):
+    _ensure_output_dir(output_dir)
+    disc = df_disconnected[df_disconnected['connection_lost'] == True]
+    if len(disc) == 0:
+        return
+    timestamps = pd.to_datetime(disc['timestamp'])
+
+    for site in SITES:
+        prefix = site.lower()
+        edge_arr = disc[f'{prefix}_edge_arrivals'].values
+        synth_arr = disc[f'{prefix}_synthetic_arrivals'].values
+        gt_arr = disc[f'ground_truth_{prefix}_arrivals'].values
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.hist(edge_arr, bins=30, alpha=0.5, label='Edge predictions', color='#2c7bb6', density=True)
+        ax.hist(synth_arr, bins=30, alpha=0.5, label='KDE synthetic', color='#d7191c', density=True)
+        ax.hist(gt_arr, bins=30, alpha=0.3, label='Ground truth', color='#333333', density=True)
+        ax.set_xlabel('Arrivals per hour')
+        ax.set_ylabel('Density')
+        ax.set_title(f'{site} — Demand Distribution (Disconnected Phase)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        path = os.path.join(output_dir, f'synth_distribution_{site.lower()}.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f"Saved {path}")
+
+        fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+        ax = axes[0]
+        ax.plot(timestamps, edge_arr, label='Edge predictions', color='#2c7bb6', alpha=0.7, linewidth=0.8)
+        ax.plot(timestamps, synth_arr, label='KDE synthetic', color='#d7191c', alpha=0.7, linewidth=0.8)
+        ax.set_ylabel('Arrivals per hour')
+        ax.set_title(f'{site} — Edge Predictions vs KDE Synthetic (Disconnected Phase)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        ax = axes[1]
+        ax.plot(timestamps, gt_arr, label='Ground truth', color='#333333', alpha=0.7, linewidth=0.8)
+        ax.plot(timestamps, synth_arr, label='KDE synthetic', color='#d7191c', alpha=0.7, linewidth=0.8,
+                linestyle='--')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Arrivals per hour')
+        ax.set_title(f'{site} — Ground Truth vs KDE Synthetic (Disconnected Phase)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.autofmt_xdate()
+
+        path = os.path.join(output_dir, f'synth_timeseries_{site.lower()}.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f"Saved {path}")
+
+    fig, axes = plt.subplots(len(SITES), 1, figsize=(14, 5 * len(SITES)), sharex=True)
+    if len(SITES) == 1:
+        axes = [axes]
+    for idx, site in enumerate(SITES):
+        prefix = site.lower()
+        edge_arr = disc[f'{prefix}_edge_arrivals'].values
+        synth_arr = disc[f'{prefix}_synthetic_arrivals'].values
+        ax = axes[idx]
+        ax.scatter(edge_arr, synth_arr, alpha=0.5, s=10, color='#5e3c99')
+        min_val = min(edge_arr.min(), synth_arr.min())
+        max_val = max(edge_arr.max(), synth_arr.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=0.8, alpha=0.5)
+        ax.set_xlabel('Edge predictions')
+        ax.set_ylabel('KDE synthetic')
+        ax.set_title(f'{site} — Synthetic vs Edge Prediction Scatter')
+        ax.grid(True, alpha=0.3)
+    fig.autofmt_xdate()
+    path = os.path.join(output_dir, 'synth_scatter.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f"Saved {path}")
+
+
+def plot_scheduler_comparison(df_dt, df_baseline, output_dir, df_disconnected=None):
     _ensure_output_dir(output_dir)
 
     def _scenario_summary(df):
@@ -130,32 +205,38 @@ def plot_scheduler_comparison(df_dt, df_baseline, output_dir):
 
     base = _scenario_summary(df_baseline)
     dt = _scenario_summary(df_dt)
+    disc = _scenario_summary(df_disconnected) if df_disconnected is not None else None
 
     categories = ['Avg Waiting Time\n(minutes)', 'Avg Queue Length\n(vehicles)', 'Peak Queue\n(vehicles)', 'Avg Load Imbalance\n(utilization diff)']
     keys = ['avg_wait', 'avg_queue', 'peak_queue', 'avg_balance']
     base_vals = [base[k] for k in keys]
     dt_vals = [dt[k] for k in keys]
+    disc_vals = [disc[k] for k in keys] if disc is not None else None
 
+    n_groups = 3 if disc_vals is not None else 2
     x = np.arange(len(categories))
-    width = 0.35
+    width = 0.25 if n_groups == 3 else 0.35
+    offsets = np.linspace(-width, width, n_groups)
+    colors = ['#e66101', '#5e3c99', '#1a9641'] if n_groups == 3 else ['#e66101', '#5e3c99']
+    labels = ['Baseline', 'DT-Assisted', 'DT-Disconnected'] if n_groups == 3 else ['Baseline', 'DT-Assisted']
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    bars1 = ax.bar(x - width / 2, base_vals, width, label='Baseline', color='#e66101', alpha=0.85, edgecolor='black', linewidth=0.5)
-    bars2 = ax.bar(x + width / 2, dt_vals, width, label='DT-Assisted', color='#5e3c99', alpha=0.85, edgecolor='black', linewidth=0.5)
-
-    for bar in bars1:
-        h = bar.get_height()
-        if h > 0:
-            ax.text(bar.get_x() + bar.get_width() / 2, h * 1.02, f'{h:.1f}', ha='center', va='bottom', fontsize=8)
-    for bar in bars2:
-        h = bar.get_height()
-        if h > 0:
-            ax.text(bar.get_x() + bar.get_width() / 2, h * 1.02, f'{h:.1f}', ha='center', va='bottom', fontsize=8)
+    bar_groups = []
+    for i, (offset, color, label) in enumerate(zip(offsets, colors, labels)):
+        vals = [base_vals, dt_vals, disc_vals][i] if disc_vals is not None else [base_vals, dt_vals][i]
+        bars = ax.bar(x + offset, vals, width, label=label, color=color, alpha=0.85,
+                      edgecolor='black', linewidth=0.5)
+        bar_groups.append(bars)
+        for bar in bars:
+            h = bar.get_height()
+            if h > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, h * 1.02, f'{h:.1f}',
+                        ha='center', va='bottom', fontsize=8)
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.set_ylabel('Value')
-    ax.set_title('Baseline vs DT-Assisted: Scheduler Performance Comparison')
+    ax.set_title('Baseline vs DT-Assisted vs DT-Disconnected: Scheduler Performance Comparison')
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
 
@@ -166,7 +247,8 @@ def plot_scheduler_comparison(df_dt, df_baseline, output_dir):
     print(f"Saved {path}")
 
 
-def generate_all_plots(df_dt, df_baseline, pred_errors_dt, output_dir):
+def generate_all_plots(df_dt, df_baseline, pred_errors_dt, output_dir,
+                       df_disconnected=None):
     print("\n" + "=" * 80)
     print("GENERATING PLOTS")
     print("=" * 80)
@@ -178,6 +260,10 @@ def generate_all_plots(df_dt, df_baseline, pred_errors_dt, output_dir):
     plot_dt_predictions(pred_errors_dt, output_dir)
 
     print("\n[Plot 10] Scheduler comparison plot...")
-    plot_scheduler_comparison(df_dt, df_baseline, output_dir)
+    plot_scheduler_comparison(df_dt, df_baseline, output_dir, df_disconnected=df_disconnected)
+
+    if df_disconnected is not None:
+        print("\n[Plots 11-13] Synthetic data validation plots...")
+        plot_synthetic_validation(df_disconnected, output_dir)
 
     print(f"\nAll plots saved to {output_dir}/")

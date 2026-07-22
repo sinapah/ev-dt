@@ -18,7 +18,14 @@ def run_from_csv(results_dir, plots_dir):
     pred_errors_dt = pd.read_csv(os.path.join(results_dir, 'prediction_errors_dt.csv'))
     pred_errors_baseline = pd.read_csv(os.path.join(results_dir, 'prediction_errors_baseline.csv'))
 
-    run_full_evaluation(df_dt, df_baseline, pred_errors_dt, pred_errors_baseline, results_dir)
+    disc_path = os.path.join(results_dir, 'results_disconnected.csv')
+    pred_err_disc_path = os.path.join(results_dir, 'prediction_errors_disconnected.csv')
+    df_disconnected = pd.read_csv(disc_path) if os.path.exists(disc_path) else None
+    pred_errors_disconnected = pd.read_csv(pred_err_disc_path) if os.path.exists(pred_err_disc_path) else None
+
+    run_full_evaluation(df_dt, df_baseline, pred_errors_dt, pred_errors_baseline, results_dir,
+                        df_disconnected=df_disconnected,
+                        pred_errors_disconnected=pred_errors_disconnected)
     generate_all_plots(df_dt, df_baseline, pred_errors_dt, plots_dir)
 
 

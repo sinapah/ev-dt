@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from scipy.stats import ks_2samp, entropy
 from sklearn.metrics import r2_score
 
 from config import SITES
@@ -106,7 +107,7 @@ def compute_dt_metrics(pred_errors_df, output_dir):
     return result_df
 
 
-def compute_scheduler_metrics(df_dt, df_baseline, output_dir):
+def compute_scheduler_metrics(df_dt, df_baseline, output_dir, df_disconnected=None):
     def _scenario_metrics(df, label):
         m = {}
         all_queues = []
@@ -145,13 +146,25 @@ def compute_scheduler_metrics(df_dt, df_baseline, output_dir):
     dt_m = _scenario_metrics(df_dt, 'DT_Assisted')
     base_m = _scenario_metrics(df_baseline, 'Baseline')
 
+    if df_disconnected is not None:
+        disc_m = _scenario_metrics(df_disconnected, 'DT_Disconnected')
+        scenarios = {
+            'Baseline': base_m,
+            'DT_Assisted': dt_m,
+            'DT_Disconnected': disc_m,
+        }
+    else:
+        scenarios = {
+            'Baseline': base_m,
+            'DT_Assisted': dt_m,
+        }
+
     rows = []
     for key in dt_m:
-        rows.append({
-            'metric': key,
-            'DT_Assisted': dt_m[key],
-            'Baseline': base_m[key],
-        })
+        row = {'metric': key}
+        for scenario_name, scenario_data in scenarios.items():
+            row[scenario_name] = scenario_data[key]
+        rows.append(row)
 
     result_df = pd.DataFrame(rows)
     result_df.to_csv(os.path.join(output_dir, 'scheduler_metrics.csv'), index=False)
@@ -161,21 +174,39 @@ def compute_scheduler_metrics(df_dt, df_baseline, output_dir):
 
 def compute_improvement_metrics(scheduler_metrics_df, output_dir):
     metrics = {}
-    for _, row in scheduler_metrics_df.iterrows():
-        metric_name = row['metric']
-        baseline = row['Baseline']
-        dt_val = row['DT_Assisted']
-        if baseline != 0:
-            improvement = 100.0 * (baseline - dt_val) / baseline
-        else:
-            improvement = 0.0
-        metrics[metric_name] = round(improvement, 2)
+    scenarios = [c for c in scheduler_metrics_df.columns if c != 'metric']
+    baseline_col = 'Baseline'
+
+    for scenario in scenarios:
+        if scenario == baseline_col:
+            continue
+        for _, row in scheduler_metrics_df.iterrows():
+            metric_name = row['metric']
+            baseline = row[baseline_col]
+            scen_val = row[scenario]
+            if baseline != 0:
+                improvement = 100.0 * (baseline - scen_val) / baseline
+            else:
+                improvement = 0.0
+            metrics[f'{scenario}_{metric_name}'] = round(improvement, 2)
 
     rows = [
-        {'metric': 'Waiting Time Reduction (%)', 'improvement_pct': metrics.get('avg_waiting_time', 0)},
-        {'metric': 'Queue Length Reduction (%)', 'improvement_pct': metrics.get('avg_queue_length', 0)},
-        {'metric': 'Peak Queue Reduction (%)', 'improvement_pct': metrics.get('peak_queue_length', 0)},
-        {'metric': 'Load Balance Improvement (%)', 'improvement_pct': metrics.get('avg_load_imbalance', 0)},
+        {
+            'metric': 'Waiting Time Reduction (%)',
+            **{s: metrics.get(f'{s}_avg_waiting_time', 0) for s in scenarios if s != baseline_col},
+        },
+        {
+            'metric': 'Queue Length Reduction (%)',
+            **{s: metrics.get(f'{s}_avg_queue_length', 0) for s in scenarios if s != baseline_col},
+        },
+        {
+            'metric': 'Peak Queue Reduction (%)',
+            **{s: metrics.get(f'{s}_peak_queue_length', 0) for s in scenarios if s != baseline_col},
+        },
+        {
+            'metric': 'Load Balance Improvement (%)',
+            **{s: metrics.get(f'{s}_avg_load_imbalance', 0) for s in scenarios if s != baseline_col},
+        },
     ]
 
     result_df = pd.DataFrame(rows)
@@ -184,7 +215,66 @@ def compute_improvement_metrics(scheduler_metrics_df, output_dir):
     return result_df
 
 
-def generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improvement_metrics, output_dir):
+def compute_synthetic_validation(df_disconnected, output_dir):
+    disc = df_disconnected[df_disconnected['connection_lost'] == True].copy()
+    if len(disc) == 0:
+        print("No disconnected timesteps found — skipping synthetic validation.")
+        return pd.DataFrame()
+
+    rows = []
+    for site in SITES:
+        prefix = site.lower()
+        edge_arr = disc[f'{prefix}_predicted_arrivals'].values
+        synth_arr = disc[f'{prefix}_synthetic_arrivals'].values
+        gt_arr = disc[f'ground_truth_{prefix}_arrivals'].values
+
+        edge_synth_ks = ks_2samp(edge_arr, synth_arr)
+        synth_gt_ks = ks_2samp(synth_arr, gt_arr)
+
+        edge_hist, bin_edges = np.histogram(edge_arr, bins=30, density=True)
+        synth_hist, _ = np.histogram(synth_arr, bins=bin_edges, density=True)
+        gt_hist, _ = np.histogram(gt_arr, bins=bin_edges, density=True)
+
+        eps = 1e-12
+        edge_synth_js = 0.5 * (
+            entropy(edge_hist + eps, (edge_hist + synth_hist) / 2 + eps)
+            + entropy(synth_hist + eps, (edge_hist + synth_hist) / 2 + eps)
+        )
+        synth_gt_js = 0.5 * (
+            entropy(synth_hist + eps, (synth_hist + gt_hist) / 2 + eps)
+            + entropy(gt_hist + eps, (synth_hist + gt_hist) / 2 + eps)
+        )
+
+        synth_vs_edge_mae = float(np.mean(np.abs(synth_arr - edge_arr)))
+        synth_vs_gt_mae = float(np.mean(np.abs(synth_arr - gt_arr)))
+
+        edge_ac = float(np.corrcoef(edge_arr[:-1], edge_arr[1:])[0, 1]) if len(edge_arr) > 1 else 0
+        synth_ac = float(np.corrcoef(synth_arr[:-1], synth_arr[1:])[0, 1]) if len(synth_arr) > 1 else 0
+        gt_ac = float(np.corrcoef(gt_arr[:-1], gt_arr[1:])[0, 1]) if len(gt_arr) > 1 else 0
+
+        rows.append({
+            'site': site,
+            'edge_vs_synth_ks_stat': f'{edge_synth_ks.statistic:.4f}',
+            'edge_vs_synth_ks_pval': f'{edge_synth_ks.pvalue:.4e}',
+            'synth_vs_gt_ks_stat': f'{synth_gt_ks.statistic:.4f}',
+            'synth_vs_gt_ks_pval': f'{synth_gt_ks.pvalue:.4e}',
+            'edge_vs_synth_js_div': f'{edge_synth_js:.6f}',
+            'synth_vs_gt_js_div': f'{synth_gt_js:.6f}',
+            'synth_vs_edge_mae': round(synth_vs_edge_mae, 4),
+            'synth_vs_gt_mae': round(synth_vs_gt_mae, 4),
+            'edge_autocorr': round(edge_ac, 4),
+            'synth_autocorr': round(synth_ac, 4),
+            'gt_autocorr': round(gt_ac, 4),
+        })
+
+    result_df = pd.DataFrame(rows)
+    result_df.to_csv(os.path.join(output_dir, 'synthetic_validation.csv'), index=False)
+    print(f"Synthetic validation saved to {os.path.join(output_dir, 'synthetic_validation.csv')}")
+    return result_df
+
+
+def generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improvement_metrics,
+                            output_dir, synthetic_validation=None):
     lines = []
     lines.append("=" * 80)
     lines.append("COMPREHENSIVE EVALUATION SUMMARY REPORT")
@@ -202,11 +292,21 @@ def generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improveme
 
     lines.append("\n--- 3. Scheduler Impact ---")
     for _, row in scheduler_metrics.iterrows():
-        lines.append(f"  {row['metric']}: Baseline={row['Baseline']}, DT-Assisted={row['DT_Assisted']}")
+        parts = [f"  {row['metric']}"]
+        for col in scheduler_metrics.columns:
+            if col == 'metric':
+                continue
+            parts.append(f"{col}={row[col]}")
+        lines.append(', '.join(parts))
 
-    lines.append("\n--- 4. Improvement Metrics (DT over Baseline) ---")
+    lines.append("\n--- 4. Improvement Metrics (vs Baseline) ---")
     for _, row in improvement_metrics.iterrows():
-        lines.append(f"  {row['metric']}: {row['improvement_pct']:.2f}%")
+        parts = [f"  {row['metric']}"]
+        for col in improvement_metrics.columns:
+            if col == 'metric':
+                continue
+            parts.append(f"{col}={row[col]:.2f}%")
+        lines.append(', '.join(parts))
 
     lines.append("\n--- 5. Key Findings ---")
     fl_overall = fl_metrics[fl_metrics['site'] == 'Overall']
@@ -215,7 +315,25 @@ def generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improveme
         lines.append(f"  FL Prediction: MAE={r['mae']:.4f}, RMSE={r['rmse']:.4f}, R²={r['r2']:.4f}")
 
     for _, row in improvement_metrics.iterrows():
-        lines.append(f"  {row['metric']}: {row['improvement_pct']:.2f}%")
+        parts = [f"  {row['metric']}"]
+        for col in improvement_metrics.columns:
+            if col == 'metric':
+                continue
+            parts.append(f"{col}={row[col]:.2f}%")
+        lines.append(', '.join(parts))
+
+    if synthetic_validation is not None and len(synthetic_validation) > 0:
+        lines.append("\n--- 6. Synthetic Data Validation (Disconnected Phase) ---")
+        for _, row in synthetic_validation.iterrows():
+            lines.append(f"  {row['site']}:")
+            lines.append(f"    Edge vs Synth KS={row['edge_vs_synth_ks_stat']} "
+                         f"(p={row['edge_vs_synth_ks_pval']}), JS={row['edge_vs_synth_js_div']}, "
+                         f"MAE={row['synth_vs_edge_mae']}")
+            lines.append(f"    Synth vs Truth KS={row['synth_vs_gt_ks_stat']} "
+                         f"(p={row['synth_vs_gt_ks_pval']}), JS={row['synth_vs_gt_js_div']}, "
+                         f"MAE={row['synth_vs_gt_mae']}")
+            lines.append(f"    Autocorrelation: Edge={row['edge_autocorr']}, "
+                         f"Synth={row['synth_autocorr']}, GroundTruth={row['gt_autocorr']}")
 
     report = '\n'.join(lines)
     print(report)
@@ -228,7 +346,8 @@ def generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improveme
     return report
 
 
-def run_full_evaluation(df_dt, df_baseline, pred_errors_dt, pred_errors_baseline, output_dir):
+def run_full_evaluation(df_dt, df_baseline, pred_errors_dt, pred_errors_baseline, output_dir,
+                        df_disconnected=None, pred_errors_disconnected=None):
     os.makedirs(output_dir, exist_ok=True)
 
     print("\n" + "=" * 80)
@@ -242,19 +361,30 @@ def run_full_evaluation(df_dt, df_baseline, pred_errors_dt, pred_errors_baseline
     dt_metrics = compute_dt_metrics(pred_errors_dt, output_dir)
 
     print("\n[3/4] Computing Scheduler metrics...")
-    scheduler_metrics = compute_scheduler_metrics(df_dt, df_baseline, output_dir)
+    scheduler_metrics = compute_scheduler_metrics(
+        df_dt, df_baseline, output_dir, df_disconnected=df_disconnected
+    )
 
     print("\n[4/4] Computing Improvement metrics...")
     improvement_metrics = compute_improvement_metrics(scheduler_metrics, output_dir)
 
+    synthetic_validation = None
+    if df_disconnected is not None:
+        print("\n[Extra] Computing Synthetic Data Validation...")
+        synthetic_validation = compute_synthetic_validation(df_disconnected, output_dir)
+
     print("\n" + "=" * 80)
     print("GENERATING SUMMARY REPORT")
     print("=" * 80)
-    generate_summary_report(fl_metrics, dt_metrics, scheduler_metrics, improvement_metrics, output_dir)
+    generate_summary_report(
+        fl_metrics, dt_metrics, scheduler_metrics, improvement_metrics,
+        output_dir, synthetic_validation=synthetic_validation
+    )
 
     return {
         'fl_metrics': fl_metrics,
         'dt_metrics': dt_metrics,
         'scheduler_metrics': scheduler_metrics,
         'improvement_metrics': improvement_metrics,
+        'synthetic_validation': synthetic_validation,
     }

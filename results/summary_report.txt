@@ -3,39 +3,49 @@ COMPREHENSIVE EVALUATION SUMMARY REPORT
 ================================================================================
 
 --- 1. Federated Demand Prediction ---
-  Caltech: MAE=0.6749, RMSE=1.3552, MAPE=62.44%, R²=0.5438
-  JPL: MAE=0.7429, RMSE=1.6675, MAPE=59.38%, R²=0.7901
-  Overall: MAE=0.7089, RMSE=1.5194, MAPE=60.97%, R²=0.7340
+  Caltech: MAE=1.6121, RMSE=2.6866, MAPE=51.54%, R²=0.6034
+  JPL: MAE=1.0592, RMSE=2.2902, MAPE=71.26%, R²=0.5515
+  Overall: MAE=1.3356, RMSE=2.4963, MAPE=57.33%, R²=0.6113
 
 --- 2. Digital Twin Prediction ---
-  Caltech: Queue MAE=0.3349, Queue RMSE=0.9884, Wait MAE=0.1385, Wait RMSE=1.7701, Util MAE=0.0146, Util RMSE=0.0425
-  JPL: Queue MAE=0.5531, Queue RMSE=1.5917, Wait MAE=0.1675, Wait RMSE=1.9969, Util MAE=0.0116, Util RMSE=0.0359
+  Caltech: Queue MAE=1.1214, Queue RMSE=1.7654, Wait MAE=0.1498, Wait RMSE=1.6314, Util MAE=0.0080, Util RMSE=0.0274
+  JPL: Queue MAE=1.0991, Queue RMSE=2.2706, Wait MAE=0.6344, Wait RMSE=4.6280, Util MAE=0.0199, Util RMSE=0.0515
 
 --- 3. Scheduler Impact ---
-  Caltech_avg_queue: Baseline=13.2237, DT-Assisted=20.2331
-  Caltech_avg_wait: Baseline=281.7288, DT-Assisted=430.1902
-  Caltech_peak_queue: Baseline=353.51, DT-Assisted=452.03
-  Caltech_avg_util: Baseline=0.3296, DT-Assisted=0.4005
-  JPL_avg_queue: Baseline=41.2996, DT-Assisted=22.0698
-  JPL_avg_wait: Baseline=933.6953, DT-Assisted=512.8987
-  JPL_peak_queue: Baseline=372.59, DT-Assisted=277.95
-  JPL_avg_util: Baseline=0.5689, DT-Assisted=0.498
-  avg_waiting_time: Baseline=607.712, DT-Assisted=471.5445
-  avg_queue_length: Baseline=54.5233, DT-Assisted=42.303
-  peak_queue_length: Baseline=697.98, DT-Assisted=715.35
-  avg_utilization: Baseline=0.4492, DT-Assisted=0.4493
-  avg_load_imbalance: Baseline=0.2572, DT-Assisted=0.1254
-  max_load_imbalance: Baseline=1.0, DT-Assisted=1.0
+  Caltech_avg_queue, Baseline=51.0827, DT_Assisted=53.207, DT_Disconnected=53.207
+  Caltech_avg_wait, Baseline=929.7713, DT_Assisted=930.9697, DT_Disconnected=930.9697
+  Caltech_peak_queue, Baseline=126.67, DT_Assisted=154.92, DT_Disconnected=154.92
+  Caltech_avg_util, Baseline=0.9536, DT_Assisted=0.9184, DT_Disconnected=0.9184
+  JPL_avg_queue, Baseline=37.8187, DT_Assisted=31.8104, DT_Disconnected=31.8104
+  JPL_avg_wait, Baseline=738.2966, DT_Assisted=638.2063, DT_Disconnected=638.2063
+  JPL_peak_queue, Baseline=145.0, DT_Assisted=113.43, DT_Disconnected=113.43
+  JPL_avg_util, Baseline=0.7638, DT_Assisted=0.7912, DT_Disconnected=0.7912
+  avg_waiting_time, Baseline=834.034, DT_Assisted=784.588, DT_Disconnected=784.588
+  avg_queue_length, Baseline=88.9014, DT_Assisted=85.0175, DT_Disconnected=85.0175
+  peak_queue_length, Baseline=267.68, DT_Assisted=265.77, DT_Disconnected=265.77
+  avg_utilization, Baseline=0.8587, DT_Assisted=0.8548, DT_Disconnected=0.8548
+  avg_load_imbalance, Baseline=0.1955, DT_Assisted=0.1335, DT_Disconnected=0.1335
+  max_load_imbalance, Baseline=0.9333, DT_Assisted=0.8927, DT_Disconnected=0.8927
 
---- 4. Improvement Metrics (DT over Baseline) ---
-  Waiting Time Reduction (%): 22.41%
-  Queue Length Reduction (%): 22.41%
-  Peak Queue Reduction (%): -2.49%
-  Load Balance Improvement (%): 51.24%
+--- 4. Improvement Metrics (vs Baseline) ---
+  Waiting Time Reduction (%), DT_Assisted=5.93%, DT_Disconnected=5.93%
+  Queue Length Reduction (%), DT_Assisted=4.37%, DT_Disconnected=4.37%
+  Peak Queue Reduction (%), DT_Assisted=0.71%, DT_Disconnected=0.71%
+  Load Balance Improvement (%), DT_Assisted=31.71%, DT_Disconnected=31.71%
 
 --- 5. Key Findings ---
-  FL Prediction: MAE=0.7089, RMSE=1.5194, R²=0.7340
-  Waiting Time Reduction (%): 22.41%
-  Queue Length Reduction (%): 22.41%
-  Peak Queue Reduction (%): -2.49%
-  Load Balance Improvement (%): 51.24%
+  FL Prediction: MAE=1.3356, RMSE=2.4963, R²=0.6113
+  Waiting Time Reduction (%), DT_Assisted=5.93%, DT_Disconnected=5.93%
+  Queue Length Reduction (%), DT_Assisted=4.37%, DT_Disconnected=4.37%
+  Peak Queue Reduction (%), DT_Assisted=0.71%, DT_Disconnected=0.71%
+  Load Balance Improvement (%), DT_Assisted=31.71%, DT_Disconnected=31.71%
+
+--- 6. Synthetic Data Validation (Disconnected Phase) ---
+  Caltech:
+    Edge vs Synth KS=0.2900 (p=4.1174e-04), JS=0.252585, MAE=2.9588
+    Synth vs Truth KS=0.2100 (p=2.4056e-02), JS=0.053496, MAE=3.36
+    Autocorrelation: Edge=0.7163, Synth=0.9131, GroundTruth=0.5988
+  JPL:
+    Edge vs Synth KS=0.3200 (p=6.2812e-05), JS=0.161988, MAE=1.6934
+    Synth vs Truth KS=0.3500 (p=7.8502e-06), JS=0.110345, MAE=1.99
+    Autocorrelation: Edge=0.6076, Synth=0.9075, GroundTruth=0.5075
