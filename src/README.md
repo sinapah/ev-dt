@@ -10,9 +10,32 @@
 | `federated_coordinator.py` | `FederatedCoordinator` — collects model weights from edge nodes, performs FedAvg, distributes global model back |
 | `digital_twin.py` | `DigitalTwin` — receives current state + predicted arrivals, predicts future queue/wait/utilization/congestion per site using a simple queue approximation |
 | `queue_simulator.py` | `QueueSimulator` — lightweight discrete queue dynamics: given routed arrivals and service rates, computes resulting queue length, waiting time, and utilization |
-| `scheduler.py` | `Scheduler` — two modes: baseline (historical demand proportion) and DT-guided (inverse-congestion proportional allocation) |
+| `scheduler.py` | `Scheduler` — see [Routing: Baseline vs DT-Guided](#routing-baseline-vs-dt-guided) below |
 | `simulation_runner.py` | `SimulationRunner` — orchestrates the two-phase workflow: **training** (FL every 24h) then **evaluation** (DT vs baseline comparison with queue simulation) |
 | `main.py` | Entry point — runs full pipeline and saves results to CSV |
+
+## Routing: Baseline vs DT-Guided
+
+Both modes in `Scheduler` (`scheduler.py`) share a two-stage structure:
+
+1. **Captive split** — 60% of arrivals at each site must charge at their natural site (configurable via `CAPTIVE_FRACTION`).
+2. **Flexible split** — the remaining 40% can be routed to either Caltech or JPL.
+
+| | Baseline | DT-Guided |
+|---|---|---|
+| **Input** | Static `historical_split` (historical ratio of Caltech arrivals to total demand) | Predicted waiting times from the Digital Twin's what-if simulation |
+| **Logic** | Flexible EVs split proportionally to the historical ratio: `flex_cal = total_flexible * historical_split` | Flexible EVs split by inverse-waiting-time weighting: `share_site = (1/wt_site) / sum(1/wt_all_sites)` |
+| **Adaptivity** | None — a fixed 40.4% / 59.6% split regardless of current congestion | Dynamic — buses more flexible traffic toward the site with shorter predicted queues |
+
+### Why DT-guided is more efficient
+
+The Digital Twin (`digital_twin.py`) runs a fast what-if simulation using current queue state and predicted arrivals (from EdgeNodes) to forecast waiting times under baseline routing. The scheduler then re-routes flexible EVs away from the predicted bottleneck:
+
+```
+predicted arrivals → DT what-if simulation → predicted waiting times → scheduler inverse-weight routing → load-balanced assignment
+```
+
+This creates a **closed feedback loop**: if Caltech is predicted to be congested, more flexible EVs are sent to JPL, smoothing load in real time. The baseline, relying on a static historical average, cannot react to transient spikes. Metrics like `avg_waiting_time`, `avg_queue_length`, and `load_imbalance` are compared across both modes in `evaluation.py`.
 
 ## Data Flow
 
