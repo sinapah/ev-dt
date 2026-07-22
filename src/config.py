@@ -28,6 +28,14 @@ FEATURE_NAMES = (
     + ['hour', 'day_of_week', 'is_weekend']
 )
 
+KDE_HISTORY_WINDOW = 720
+KDE_N_SAMPLES = 2000
+KDE_TEMP_SIGMA_HOUR = 2.0
+KDE_TEMP_SIGMA_DOW = 1.0
+KDE_BANDWIDTH = 'scott'
+
+DISCONNECT_START_FRACTION = 0.8
+
 COLUMN_MAP = {
     'arrivals_per_hour': 'arrivals',
     'average_queue_length': 'queue_length',

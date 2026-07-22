@@ -1,0 +1,3 @@
+site,edge_vs_synth_ks_stat,edge_vs_synth_ks_pval,synth_vs_gt_ks_stat,synth_vs_gt_ks_pval,edge_vs_synth_js_div,synth_vs_gt_js_div,synth_vs_edge_mae,synth_vs_gt_mae,edge_autocorr,synth_autocorr,gt_autocorr
+Caltech,0.2900,4.1174e-04,0.2100,2.4056e-02,0.252585,0.053496,2.9588,3.36,0.7163,0.9131,0.5988
+JPL,0.3200,6.2812e-05,0.3500,7.8502e-06,0.161988,0.110345,1.6934,1.99,0.6076,0.9075,0.5075

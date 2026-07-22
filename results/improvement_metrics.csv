@@ -1,5 +1,5 @@
-metric,improvement_pct
-Waiting Time Reduction (%),22.41
-Queue Length Reduction (%),22.41
-Peak Queue Reduction (%),-2.49
-Load Balance Improvement (%),51.24
+metric,DT_Assisted,DT_Disconnected
+Waiting Time Reduction (%),5.93,5.93
+Queue Length Reduction (%),4.37,4.37
+Peak Queue Reduction (%),0.71,0.71
+Load Balance Improvement (%),31.71,31.71
